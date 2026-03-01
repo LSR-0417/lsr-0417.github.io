@@ -1,162 +1,187 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IPFS HLS 動態串流測試器</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IPFS HLS 串流測試器 (多語系自動掛載)</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            text-align: center; 
-            margin-top: 50px; 
-            background-color: #f5f5f5;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .input-group {
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-        }
-        input[type="text"] {
-            flex: 1;
-            padding: 10px;
-            font-size: 16px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        video { 
-            width: 100%; 
-            background-color: black;
-            border-radius: 8px; 
-            aspect-ratio: 16 / 9;
-        }
-        #status {
-            margin-top: 10px;
-            color: #666;
-            font-size: 14px;
-        }
+      body {
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        text-align: center;
+        margin-top: 50px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .input-group {
+        margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
+      }
+      input[type="text"] {
+        flex: 1;
+        padding: 10px;
+        font-size: 16px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      /* 讓影片稍微有些微的圓角和陰影 */
+      video {
+        width: 100%;
+        background-color: black;
+        border-radius: 8px;
+        aspect-ratio: 16 / 9;
+        margin-top: 15px;
+      }
+      /* 也可以用 CSS 稍微自訂字幕的樣式 */
+      ::cue {
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        font-size: clamp(16px, 5vh, 40px);
+        font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+      }
+
+
+      #status {
+        margin-top: 10px;
+        color: #666;
+        font-size: 14px;
+      }
     </style>
-</head>
-<body>
-
+  </head>
+  <body>
     <div class="container">
-        <h2>IPFS 去中心化影片播放器</h2>
-        
-        <div class="input-group">
-            <input type="text" id="cidInput" placeholder="請輸入 HLS 資料夾的 CID (例如: Qm... 或 bafy...)">
-            <button id="playBtn">載入並播放</button>
-        </div>
+      <h2>IPFS 去中心化影片播放器</h2>
 
-        <video id="video" controls></video>
-        <div id="status">等待輸入 CID...</div>
+      <div class="input-group">
+        <input type="text" id="cidInput" placeholder="請輸入 HLS 資料夾 CID" />
+        <button id="playBtn">載入並播放</button>
+      </div>
+
+      <video id="video" controls crossorigin="anonymous"></video>
+      <div id="status">等待輸入...</div>
     </div>
 
     <script>
-        const video = document.getElementById('video');
-        const cidInput = document.getElementById('cidInput');
-        const playBtn = document.getElementById('playBtn');
-        const statusText = document.getElementById('status');
-        
-        let hlsInstance = null; // 用來儲存當前的 hls.js 實體
+      const video = document.getElementById("video");
+      const cidInput = document.getElementById("cidInput");
+      const playBtn = document.getElementById("playBtn");
+      const statusText = document.getElementById("status");
 
-        function loadAndPlayVideo() {
-            const cid = cidInput.value.trim();
-            
-            if (!cid) {
-                alert('請先輸入有效的 CID！');
-                return;
-            }
+      let hlsInstance = null;
 
-            statusText.textContent = '正在嘗試連接本地 IPFS 節點...';
+      function loadAndPlayVideo() {
+        const cid = cidInput.value.trim();
 
-            // 假設你的 m3u8 檔名都是 output.m3u8
-            // 本地預設的 Gateway 通常在 http://localhost:8080 或是 http://127.0.0.1:8080
-            const m3u8Filename = 'output.m3u8'; 
-            const ipfsUrl = `http://127.0.0.1:8080/ipfs/${cid}/${m3u8Filename}`;
-
-            // 【重點】如果之前已經有影片在播，必須先清理掉，避免記憶體洩漏與背景下載衝突
-            if (hlsInstance) {
-                hlsInstance.destroy();
-                hlsInstance = null;
-            }
-
-            // 檢查瀏覽器是否原生支援 HLS (如 Safari)
-            if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = ipfsUrl;
-                video.addEventListener('loadedmetadata', function() {
-                    statusText.textContent = '播放中 (原生 HLS 支援)';
-                    video.play();
-                });
-                video.addEventListener('error', function() {
-                    statusText.textContent = '載入失敗，請確認 CID 正確且 IPFS 節點已啟動並設定好 CORS。';
-                });
-            } 
-            // 檢查瀏覽器是否支援 Media Source Extensions (如 Chrome, Firefox, Edge)
-            else if (Hls.isSupported()) {
-                hlsInstance = new Hls();
-                
-                hlsInstance.loadSource(ipfsUrl);
-                hlsInstance.attachMedia(video);
-                
-                hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
-                    statusText.textContent = '播放清單解析成功，開始播放！';
-                    video.play();
-                });
-
-                // 錯誤處理
-                hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-                    if (data.fatal) {
-                        switch(data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                statusText.textContent = "網路錯誤！請檢查本地 IPFS 節點 (127.0.0.1:8080) 是否開啟，以及 CORS 是否已設定。";
-                                hlsInstance.startLoad();
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                statusText.textContent = "影片解析錯誤，正在嘗試復原...";
-                                hlsInstance.recoverMediaError();
-                                break;
-                            default:
-                                statusText.textContent = "發生未知錯誤，無法播放。";
-                                hlsInstance.destroy();
-                                break;
-                        }
-                    }
-                });
-            } else {
-                statusText.textContent = '你的瀏覽器不支援 HLS 播放！';
-            }
+        if (!cid) {
+          alert("請先輸入有效的 CID！");
+          return;
         }
 
-        // 綁定按鈕點擊事件
-        playBtn.addEventListener('click', loadAndPlayVideo);
+        statusText.textContent = "正在準備播放...";
 
-        // 綁定 Enter 鍵事件，讓操作更順手
-        cidInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                loadAndPlayVideo();
-            }
+        const m3u8Filename = "output.m3u8";
+        const ipfsBaseUrl = `http://127.0.0.1:8080/ipfs/${cid}/`;
+        const videoUrl = `${ipfsBaseUrl}${m3u8Filename}`;
+
+        // 1. 清理舊的 HLS 實體
+        if (hlsInstance) {
+          hlsInstance.destroy();
+          hlsInstance = null;
+        }
+
+        // 2. 清理舊的字幕軌道 (避免切換影片時字幕疊加)
+        const oldTracks = video.querySelectorAll("track");
+        oldTracks.forEach((t) => t.remove());
+
+        // 3. 【全自動掛載多語系字幕軌道】
+        // 這裡定義你可能會放進 IPFS 資料夾的字幕檔名
+        const subtitles = [
+          {
+            lang: "zh-TW",
+            label: "繁體中文",
+            filename: "zh-TW.vtt",
+            default: true,
+          },
+          {
+            lang: "zh-CN",
+            label: "簡體中文",
+            filename: "zh-CN.vtt",
+            default: true,
+          },
+          { lang: "en", label: "English", filename: "en.vtt", default: false },
+          { lang: "ja", label: "日本語", filename: "ja.vtt", default: false },
+        ];
+
+        // 透過迴圈將所有字幕軌道加進影片中
+        subtitles.forEach((sub) => {
+          const track = document.createElement("track");
+          track.kind = "subtitles";
+          track.label = sub.label;
+          track.srclang = sub.lang;
+          track.src = `${ipfsBaseUrl}${sub.filename}`;
+
+          if (sub.default) {
+            track.default = true;
+          }
+
+          video.appendChild(track);
         });
+        console.log("已嘗試自動掛載多語系字幕");
+
+        // 4. 開始載入影片
+        if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = videoUrl;
+          video.addEventListener("loadedmetadata", function () {
+            statusText.textContent = "播放中 (原生支援，嘗試載入多語系字幕)";
+            video.play();
+          });
+        } else if (Hls.isSupported()) {
+          hlsInstance = new Hls();
+          hlsInstance.loadSource(videoUrl);
+          hlsInstance.attachMedia(video);
+
+          hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
+            statusText.textContent = "播放清單解析成功！(嘗試載入多語系字幕)";
+            video.play();
+          });
+
+          hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+            if (data.fatal) {
+              statusText.textContent = `發生錯誤: ${data.type}`;
+            }
+          });
+        }
+      }
+
+      playBtn.addEventListener("click", loadAndPlayVideo);
+
+      // 綁定 Enter 鍵事件，提升使用者體驗
+      cidInput.addEventListener("keypress", function (e) {
+        if (e.key === "Enter") {
+          loadAndPlayVideo();
+        }
+      });
     </script>
-</body>
+  </body>
 </html>
