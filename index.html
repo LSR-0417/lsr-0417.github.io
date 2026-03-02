@@ -88,12 +88,15 @@
         margin-top: 10px;
         background-color: #000;
         border-radius: 8px;
-        overflow: hidden;
+        /* 修正：移除 overflow: hidden 讓畫質選單可以溢出容器顯示 */
+        overflow: visible;
         aspect-ratio: 16 / 9;
       }
 
       .plyr {
         height: 100%;
+        /* 修正：將圓角套用在 Plyr 層級 */
+        border-radius: 8px;
       }
 
       video {
@@ -156,6 +159,17 @@
 
         select {
           width: 100%;
+        }
+
+        /* 修正：手機版畫質選單避免超出播放器範圍且支援內部滾動 */
+        .plyr__menu__container {
+          max-height: 180px; /* 限制選單最大高度 */
+          overflow-y: auto; /* 開啟垂直滾動 */
+        }
+
+        /* 調整選單彈出位置，避免被控制列完全遮擋 */
+        .plyr__menu__container [role='menu'] {
+          margin-bottom: 10px;
         }
       }
     </style>
