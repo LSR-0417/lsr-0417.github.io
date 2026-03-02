@@ -150,6 +150,11 @@
                 return;
             }
 
+            // 動態更新網址列，方便使用者直接複製分享
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('cid', cid);
+            window.history.pushState({}, '', currentUrl);
+
             // 組合完整的基礎路徑
             const ipfsBaseUrl = `${selectedGateway}${cid}/`;
             const m3u8Url = `${ipfsBaseUrl}output.m3u8`;
@@ -164,7 +169,7 @@
             const oldTracks = video.querySelectorAll('track');
             oldTracks.forEach(t => t.remove());
 
-            // 2. 自動探測字幕 (繁中、英文、日文)
+            // 2. 自動探測字幕
             const possibleSubtitles = [
                 { lang: 'en', label: 'English', filename: 'en.vtt' },
                 { lang: 'zh-TW', label: '繁體中文', filename: 'zh-TW.vtt' },
@@ -174,7 +179,6 @@
 
             let foundSubtitle = false;
 
-            // 使用 Promise.all 同時探測，加快網關響應速度
             const detectionPromises = possibleSubtitles.map(async (sub) => {
                 try {
                     const response = await fetch(`${ipfsBaseUrl}${sub.filename}`, { method: 'GET' });
@@ -207,8 +211,9 @@
                 hlsInstance.attachMedia(video);
                 hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
                     statusText.textContent = `成功！來源：${selectedGateway}`;
+                    // 注意：瀏覽器的自動播放政策可能會阻擋帶有聲音的影片自動播放
                     video.play().catch(() => {
-                        statusText.textContent = "影片已準備好，請點擊播放按鈕。";
+                        statusText.textContent = "影片已準備好，請點擊畫面或播放按鈕開始。";
                     });
                 });
 
@@ -218,14 +223,27 @@
                     }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // 支援 Safari 原生播放
                 video.src = m3u8Url;
-                video.play();
+                video.play().catch(() => {
+                    statusText.textContent = "影片已準備好，請點擊畫面或播放按鈕開始。";
+                });
             }
         }
 
         playBtn.addEventListener('click', loadAndPlayVideo);
         cidInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') loadAndPlayVideo(); });
+
+        // 網頁載入時，檢查網址列是否有 cid 參數
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const cidFromUrl = urlParams.get('cid');
+            
+            if (cidFromUrl) {
+                // 如果有參數，自動填入輸入框並執行載入邏輯
+                cidInput.value = cidFromUrl;
+                loadAndPlayVideo();
+            }
+        });
     </script>
 </body>
 
