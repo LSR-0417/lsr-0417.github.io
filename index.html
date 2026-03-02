@@ -64,11 +64,20 @@
             cursor: pointer;
             transition: 0.3s;
             font-weight: bold;
+            white-space: nowrap;
         }
 
         button:hover {
             background-color: #0056b3;
             transform: translateY(-1px);
+        }
+
+        /* 複製分享按鈕的專屬樣式 */
+        #shareBtn {
+            background-color: #28a745;
+        }
+        #shareBtn:hover {
+            background-color: #218838;
         }
 
         video {
@@ -125,6 +134,7 @@
             <div class="input-row">
                 <input type="text" id="cidInput" placeholder="請輸入資料夾 CID (例如: Qm...)">
                 <button id="playBtn">開始播放</button>
+                <button id="shareBtn" title="複製包含目前播放時間的連結">🔗 分享片段</button>
             </div>
         </div>
 
@@ -137,11 +147,13 @@
         const cidInput = document.getElementById('cidInput');
         const gatewaySelect = document.getElementById('gatewaySelect');
         const playBtn = document.getElementById('playBtn');
+        const shareBtn = document.getElementById('shareBtn');
         const statusText = document.getElementById('status');
 
         let hlsInstance = null;
 
-        async function loadAndPlayVideo() {
+        // 【修改 1】讓載入函數可以接收一個起始時間參數 (預設為 0)
+        async function loadAndPlayVideo(startTime = 0) {
             const cid = cidInput.value.trim();
             const selectedGateway = gatewaySelect.value;
 
@@ -150,18 +162,18 @@
                 return;
             }
 
-            // 動態更新網址列，方便使用者直接複製分享
+            // 更新網址列的 CID (如果有指定時間，就在分享按鈕那邊處理，這裡只保持乾淨的 CID)
             const currentUrl = new URL(window.location.href);
             currentUrl.searchParams.set('cid', cid);
+            // 每次手動重新載入時，清空網址列上的 t 參數，避免卡在同一個時間點
+            currentUrl.searchParams.delete('t'); 
             window.history.pushState({}, '', currentUrl);
 
-            // 組合完整的基礎路徑
             const ipfsBaseUrl = `${selectedGateway}${cid}/`;
             const m3u8Url = `${ipfsBaseUrl}output.m3u8`;
 
             statusText.textContent = `正在連線至網關並探測字幕...`;
 
-            // 1. 重置播放器與字幕
             if (hlsInstance) {
                 hlsInstance.destroy();
                 hlsInstance = null;
@@ -169,7 +181,6 @@
             const oldTracks = video.querySelectorAll('track');
             oldTracks.forEach(t => t.remove());
 
-            // 2. 自動探測字幕
             const possibleSubtitles = [
                 { lang: 'en', label: 'English', filename: 'en.vtt' },
                 { lang: 'zh-TW', label: '繁體中文', filename: 'zh-TW.vtt' },
@@ -178,16 +189,12 @@
             ];
 
             let foundSubtitle = false;
-
             const detectionPromises = possibleSubtitles.map(async (sub) => {
                 try {
                     const response = await fetch(`${ipfsBaseUrl}${sub.filename}`, { method: 'GET' });
                     if (response.ok) {
                         const track = document.createElement('track');
-                        track.kind = 'subtitles';
-                        track.label = sub.label;
-                        track.srclang = sub.lang;
-                        track.src = `${ipfsBaseUrl}${sub.filename}`;
+                        track.kind = 'subtitles'; track.label = sub.label; track.srclang = sub.lang; track.src = `${ipfsBaseUrl}${sub.filename}`;
                         return track;
                     }
                 } catch (e) { return null; }
@@ -196,52 +203,87 @@
             const results = await Promise.all(detectionPromises);
             results.forEach(track => {
                 if (track) {
-                    if (!foundSubtitle) {
-                        track.default = true;
-                        foundSubtitle = true;
-                    }
+                    if (!foundSubtitle) { track.default = true; foundSubtitle = true; }
                     video.appendChild(track);
                 }
             });
 
-            // 3. 載入影片串流
+            // 【修改 2】在 HLS.js 實例化時，傳入起始時間參數
             if (Hls.isSupported()) {
-                hlsInstance = new Hls();
+                // 利用 startPosition 讓 hls.js 從指定的秒數開始下載切片
+                const hlsConfig = startTime > 0 ? { startPosition: startTime } : {};
+                hlsInstance = new Hls(hlsConfig);
+                
                 hlsInstance.loadSource(m3u8Url);
                 hlsInstance.attachMedia(video);
                 hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-                    statusText.textContent = `成功！來源：${selectedGateway}`;
-                    // 注意：瀏覽器的自動播放政策可能會阻擋帶有聲音的影片自動播放
+                    statusText.textContent = startTime > 0 ? `成功！從 ${startTime} 秒處開始播放。` : `成功！來源：${selectedGateway}`;
                     video.play().catch(() => {
                         statusText.textContent = "影片已準備好，請點擊畫面或播放按鈕開始。";
                     });
                 });
 
                 hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-                    if (data.fatal) {
-                        statusText.textContent = `網關讀取失敗，請嘗試更換其他網關。`;
-                    }
+                    if (data.fatal) { statusText.textContent = `網關讀取失敗，請嘗試更換其他網關。`; }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // 針對 Safari (原生支援 HLS 的瀏覽器) 的時間跳轉處理
                 video.src = m3u8Url;
+                if (startTime > 0) {
+                    // 必須等 metadata 載入後才能調整 currentTime
+                    video.addEventListener('loadedmetadata', function setTime() {
+                        video.currentTime = startTime;
+                        video.removeEventListener('loadedmetadata', setTime); // 執行一次後移除監聽
+                    });
+                }
                 video.play().catch(() => {
                     statusText.textContent = "影片已準備好，請點擊畫面或播放按鈕開始。";
                 });
             }
         }
 
-        playBtn.addEventListener('click', loadAndPlayVideo);
-        cidInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') loadAndPlayVideo(); });
+        playBtn.addEventListener('click', () => loadAndPlayVideo(0)); // 手動點擊播放時，從頭開始
+        cidInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') loadAndPlayVideo(0); });
 
-        // 網頁載入時，檢查網址列是否有 cid 參數
+        // 【新增功能 3】一鍵複製帶有當前時間的分享連結
+        shareBtn.addEventListener('click', () => {
+            const cid = cidInput.value.trim();
+            if (!cid) {
+                alert('請先輸入或載入 CID！');
+                return;
+            }
+            
+            // 取得目前的播放秒數並無條件捨去小數點
+            const currentTime = Math.floor(video.currentTime); 
+            
+            // 組合分享網址
+            const shareUrl = new URL(window.location.href);
+            shareUrl.searchParams.set('cid', cid);
+            if (currentTime > 0) {
+                shareUrl.searchParams.set('t', currentTime);
+            }
+            
+            // 寫入剪貼簿
+            navigator.clipboard.writeText(shareUrl.toString()).then(() => {
+                const originalText = shareBtn.textContent;
+                shareBtn.textContent = '✅ 已複製！';
+                setTimeout(() => { shareBtn.textContent = originalText; }, 2000);
+            }).catch(err => {
+                alert('複製失敗，請手動複製網址列。');
+            });
+        });
+
+        // 網頁載入時，檢查網址列是否有 cid 與 t 參數
         window.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const cidFromUrl = urlParams.get('cid');
+            // 如果網址有 ?t=120，將其轉換為整數，若無則為 0
+            const timeFromUrl = parseInt(urlParams.get('t'), 10) || 0; 
             
             if (cidFromUrl) {
-                // 如果有參數，自動填入輸入框並執行載入邏輯
                 cidInput.value = cidFromUrl;
-                loadAndPlayVideo();
+                // 將抓取到的時間參數傳遞給載入函數
+                loadAndPlayVideo(timeFromUrl); 
             }
         });
     </script>
