@@ -89,3 +89,26 @@ ffmpeg -i temp.mp4 \
   -var_stream_map "v:0,a:0 v:1,a:1 v:2,a:2 v:3,a:3 v:4,a:4" \
   "my_4k_abr/stream_%v/playlist.m3u8"
 ```
+
+第三步：串流多解析度的資料夾結構
+
+採用前端外掛字幕的方式，以下是轉檔完成後，包含字幕檔放置位置的專案資料夾結構參考：
+
+```plantext
+my_4k_abr/              # 轉檔輸出的主資料夾
+    ├── master.m3u8         # HLS 主播放清單
+    ├── subtitle.vtt        # 🚩 轉換後的 VTT 字幕檔建議放在這裡
+    ├── stream_0/           # 4K 畫質資料夾
+    │   ├── playlist.m3u8   # 該畫質的子播放清單
+    │   ├── segment_000.ts  # 影片切片檔
+    │   ├── segment_001.ts
+    │   └── ...
+    ├── stream_1/           # 1440p 畫質資料夾
+    │   └── ... (內容同上)
+    ├── stream_2/           # 1080p 畫質資料夾
+    │   └── ...
+    ├── stream_3/           # 720p 畫質資料夾
+    │   └── ...
+    └── stream_4/           # 480p 畫質資料夾
+        └── ...
+```
