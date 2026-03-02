@@ -85,7 +85,7 @@ ffmpeg -i temp.mp4 \
   -hls_time 5 \
   -hls_playlist_type vod \
   -hls_segment_filename "my_4k_abr/stream_%v/segment_%03d.ts" \
-  -master_pl_name master.m3u8 \
+  -master_pl_name output.m3u8 \
   -var_stream_map "v:0,a:0 v:1,a:1 v:2,a:2 v:3,a:3 v:4,a:4" \
   "my_4k_abr/stream_%v/playlist.m3u8"
 ```
