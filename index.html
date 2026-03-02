@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>IPFS 多網關 HLS 播放器</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <!-- 引入 Plyr 播放器套件 -->
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <style>
       body {
         font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
@@ -77,6 +80,13 @@
       }
       #shareBtn:hover {
         background-color: #218838;
+      }
+
+      /* 讓 Plyr 播放器容器有圓角與陰影，符合原本設計 */
+      .plyr {
+        border-radius: 8px;
+        margin-top: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
       }
 
       video {
@@ -238,7 +248,6 @@
 
       <video
         id="video"
-        controls
         crossorigin="anonymous"
         playsinline
         webkit-playsinline
@@ -255,6 +264,7 @@
       const statusText = document.getElementById('status');
 
       let hlsInstance = null;
+      let playerInstance = null; // 新增 Plyr 播放器實例變數
 
       // 【修改 1】讓載入函數可以接收一個起始時間參數 (預設為 0)
       async function loadAndPlayVideo(startTime = 0) {
@@ -274,10 +284,16 @@
         window.history.pushState({}, '', currentUrl);
 
         const ipfsBaseUrl = `${selectedGateway}${cid}/`;
+        // 將尋找的目標改回主播放清單 output.m3u8
         const m3u8Url = `${ipfsBaseUrl}output.m3u8`;
 
         statusText.textContent = `正在連線至網關並探測字幕...`;
 
+        // 銷毀舊的播放器實例以防衝突
+        if (playerInstance) {
+          playerInstance.destroy();
+          playerInstance = null;
+        }
         if (hlsInstance) {
           hlsInstance.destroy();
           hlsInstance = null;
@@ -285,7 +301,9 @@
         const oldTracks = video.querySelectorAll('track');
         oldTracks.forEach((t) => t.remove());
 
+        // 【修正】加入 subtitle.vtt 作為預設探測目標
         const possibleSubtitles = [
+          { lang: 'zh-TW', label: '預設字幕', filename: 'subtitle.vtt' },
           { lang: 'en', label: 'English', filename: 'en.vtt' },
           { lang: 'zh-TW', label: '繁體中文', filename: 'zh-TW.vtt' },
           { lang: 'zh-CN', label: '簡體中文', filename: 'zh-CN.vtt' },
@@ -331,11 +349,46 @@
           hlsInstance.loadSource(m3u8Url);
           hlsInstance.attachMedia(video);
           hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+            // 提取所有可用的畫質 (例如: 2160, 1080, 720)
+            const availableQualities = hlsInstance.levels.map((l) => l.height);
+            // 加入 0 代表「自動 (Auto)」自適應位元率
+            availableQualities.unshift(0);
+
+            // 初始化 Plyr 播放器，並綁定畫質選單
+            playerInstance = new Plyr(video, {
+              captions: { active: true, update: true, language: 'zh-TW' },
+              fullscreen: { iosNative: true }, // 【新增】針對 iOS 強制使用原生全螢幕
+              quality: {
+                default: 0, // 預設為自動切換
+                options: availableQualities,
+                forced: true, // 強制覆蓋原生畫質選單
+                onChange: (newQuality) => {
+                  if (newQuality === 0) {
+                    hlsInstance.currentLevel = -1; // -1 在 hls.js 中代表開啟自動切換 (ABR)
+                  } else {
+                    // 根據使用者選擇的高度 (例如 1080)，找到對應的 HLS level index 並強制切換
+                    hlsInstance.levels.forEach((level, levelIndex) => {
+                      if (level.height === newQuality) {
+                        hlsInstance.currentLevel = levelIndex;
+                      }
+                    });
+                  }
+                },
+              },
+              i18n: {
+                qualityLabel: {
+                  0: '自動 (Auto)', // 將 0 標示為自動
+                },
+              },
+            });
+
             statusText.textContent =
               startTime > 0
                 ? `成功！從 ${startTime} 秒處開始播放。`
                 : `成功！來源：${selectedGateway}`;
-            video.play().catch(() => {
+
+            // 使用 Plyr 實例來呼叫播放
+            playerInstance.play().catch(() => {
               statusText.textContent =
                 '影片已準備好，請點擊畫面或播放按鈕開始。';
             });
@@ -349,6 +402,13 @@
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
           // 針對 Safari (原生支援 HLS 的瀏覽器) 的時間跳轉處理
           video.src = m3u8Url;
+
+          // Safari 原生支援 HLS，我們一樣掛上 Plyr 提供美觀 UI，但畫質切換交由 Apple 設備系統原生處理
+          playerInstance = new Plyr(video, {
+            captions: { active: true, update: true, language: 'zh-TW' },
+            fullscreen: { iosNative: true }, // 【新增】針對 iOS 強制使用原生全螢幕
+          });
+
           if (startTime > 0) {
             // 必須等 metadata 載入後才能調整 currentTime
             video.addEventListener('loadedmetadata', function setTime() {
