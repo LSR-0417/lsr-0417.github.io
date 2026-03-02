@@ -48,6 +48,7 @@
 
       input[type='text'] {
         flex: 2;
+        min-width: 0;
       }
 
       select {
@@ -74,7 +75,6 @@
         transform: translateY(-1px);
       }
 
-      /* 複製分享按鈕的專屬樣式 */
       #shareBtn {
         background-color: #28a745;
       }
@@ -82,31 +82,23 @@
         background-color: #218838;
       }
 
-      /* 讓 Plyr 播放器容器有圓角與陰影，符合原本設計 */
-      .plyr {
-        border-radius: 8px;
+      /* 播放器容器外框：確保重新生成標籤時佈局穩定 */
+      #player-wrapper {
+        width: 100%;
         margin-top: 10px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        background-color: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        aspect-ratio: 16 / 9;
+      }
+
+      .plyr {
+        height: 100%;
       }
 
       video {
         width: 100%;
         background-color: #000;
-        border-radius: 8px;
-        aspect-ratio: 16 / 9;
-        margin-top: 10px;
-      }
-
-      /* 響應式字幕樣式 */
-      ::cue {
-        background-color: rgba(0, 0, 0, 0.7);
-        color: white;
-        font-size: clamp(16px, 5vh, 40px);
-        font-family: sans-serif;
-      }
-
-      video:fullscreen ::cue {
-        font-size: 5vh !important;
       }
 
       #status {
@@ -122,9 +114,7 @@
         font-weight: bold;
       }
 
-      /* --- RWD 響應式設計區塊 --- */
-
-      /* 1. 電腦版基礎設定：讓按鈕具備 Flexbox 置中能力 */
+      /* --- RWD 響應式設計 --- */
       .action-btn {
         display: flex;
         justify-content: center;
@@ -133,70 +123,39 @@
         transition: all 0.2s ease;
       }
 
-      /* 預設隱藏單純的 Icon */
       .btn-icon {
         display: none;
       }
 
-      /* 當螢幕寬度小於 600px 時 */
       @media (max-width: 600px) {
         .container {
-          padding: 15px; /* 縮小容器內距，騰出空間給元件 */
+          padding: 15px;
           margin-top: 20px;
         }
 
         .btn-text {
-          display: none; /* 隱藏文字 */
+          display: none;
         }
 
         .btn-icon {
-          display: block; /* 顯示圖示 */
+          display: block;
           font-size: 1.2rem;
-          line-height: 1;
         }
 
-        /* 按鈕改造：變成不變形的置中正方形 */
         .action-btn {
           padding: 0;
-          width: 46px; /* 固定寬度 */
-          height: 46px; /* 固定高度 */
-          flex-shrink: 0; /* 強制不被輸入框擠壓 */
+          width: 46px;
+          height: 46px;
+          flex-shrink: 0;
           border-radius: 8px;
         }
 
-        /* 輸入框與按鈕的間距微調 */
-        .input-row {
-          gap: 8px;
-        }
-
-        input[type='text'] {
-          padding: 10px; /* 稍微縮小輸入框內距 */
-          font-size: 14px; /* 稍微縮小字體防止 CID 太長看不見 */
-        }
-
-        /* 隱藏網關選單的標籤文字 */
         label[for='gatewaySelect'] {
           display: none;
         }
 
         select {
-          width: 100%; /* 讓網關選單佔滿整行 */
-        }
-      }
-
-      /* 針對 375px 以下極窄螢幕的終極微調 */
-      @media (max-width: 380px) {
-        .container {
-          padding: 10px; /* 進一步壓縮內距 */
-        }
-
-        .action-btn {
-          width: 42px; /* 按鈕稍微縮小一點點 */
-          height: 42px;
-        }
-
-        h2 {
-          font-size: 1.2rem; /* 標題縮小避免換行 */
+          width: 100%;
         }
       }
     </style>
@@ -232,8 +191,8 @@
             placeholder="請輸入資料夾 CID (例如: Qm...)"
           />
           <button id="playBtn" class="action-btn">
-            <span class="btn-text">▶️ 開始播放</span>
-            <span class="btn-icon">▶️</span>
+            <span class="btn-text">📥 載入資源</span>
+            <span class="btn-icon">📥</span>
           </button>
           <button
             id="shareBtn"
@@ -246,28 +205,32 @@
         </div>
       </div>
 
-      <video
-        id="video"
-        crossorigin="anonymous"
-        playsinline
-        webkit-playsinline
-      ></video>
+      <!-- 播放器 Wrapper -->
+      <div id="player-wrapper">
+        <video
+          id="video"
+          crossorigin="anonymous"
+          playsinline
+          webkit-playsinline
+        ></video>
+      </div>
+
       <div id="status">準備就緒</div>
     </div>
 
     <script>
-      const video = document.getElementById('video');
       const cidInput = document.getElementById('cidInput');
       const gatewaySelect = document.getElementById('gatewaySelect');
       const playBtn = document.getElementById('playBtn');
       const shareBtn = document.getElementById('shareBtn');
       const statusText = document.getElementById('status');
+      const playerWrapper = document.getElementById('player-wrapper');
 
       let hlsInstance = null;
-      let playerInstance = null; // 新增 Plyr 播放器實例變數
+      let playerInstance = null;
 
-      // 【修改 1】讓載入函數可以接收一個起始時間參數 (預設為 0)
-      async function loadAndPlayVideo(startTime = 0) {
+      // 核心函數：處理資源載入與生命週期重建
+      async function loadVideoResource(startTime = 0) {
         const cid = cidInput.value.trim();
         const selectedGateway = gatewaySelect.value;
 
@@ -276,201 +239,149 @@
           return;
         }
 
-        // 更新網址列的 CID (如果有指定時間，就在分享按鈕那邊處理，這裡只保持乾淨的 CID)
-        const currentUrl = new URL(window.location.href);
-        currentUrl.searchParams.set('cid', cid);
-        // 每次手動重新載入時，清空網址列上的 t 參數，避免卡在同一個時間點
-        currentUrl.searchParams.delete('t');
-        window.history.pushState({}, '', currentUrl);
+        statusText.textContent = `清理舊實例中...`;
 
-        const ipfsBaseUrl = `${selectedGateway}${cid}/`;
-        // 將尋找的目標改回主播放清單 output.m3u8
-        const m3u8Url = `${ipfsBaseUrl}output.m3u8`;
-
-        statusText.textContent = `正在連線至網關並探測字幕...`;
-
-        // 銷毀舊的播放器實例以防衝突
+        // 1. 徹底銷毀與解構舊播放器
         if (playerInstance) {
           playerInstance.destroy();
           playerInstance = null;
         }
         if (hlsInstance) {
+          hlsInstance.detachMedia();
           hlsInstance.destroy();
           hlsInstance = null;
         }
-        const oldTracks = video.querySelectorAll('track');
-        oldTracks.forEach((t) => t.remove());
 
-        // 【修正】加入 subtitle.vtt 作為預設探測目標
+        // 2. 生命週期關鍵：重建 Video DOM 節點以確保 Hls.js 附加在乾淨的環境
+        playerWrapper.innerHTML = `<video id="video" crossorigin="anonymous" playsinline webkit-playsinline></video>`;
+        const video = document.getElementById('video');
+
+        // 更新網址列
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('cid', cid);
+        currentUrl.searchParams.delete('t');
+        window.history.pushState({}, '', currentUrl);
+
+        const ipfsBaseUrl = `${selectedGateway}${cid}/`;
+        const m3u8Url = `${ipfsBaseUrl}output.m3u8`;
+
+        statusText.textContent = `正在探測資源與字幕...`;
+
+        // 探測字幕
         const possibleSubtitles = [
           { lang: 'zh-TW', label: '預設字幕', filename: 'subtitle.vtt' },
           { lang: 'en', label: 'English', filename: 'en.vtt' },
           { lang: 'zh-TW', label: '繁體中文', filename: 'zh-TW.vtt' },
-          { lang: 'zh-CN', label: '簡體中文', filename: 'zh-CN.vtt' },
-          { lang: 'ja', label: '日本語', filename: 'ja.vtt' },
         ];
 
         let foundSubtitle = false;
-        const detectionPromises = possibleSubtitles.map(async (sub) => {
+        for (const sub of possibleSubtitles) {
           try {
-            const response = await fetch(`${ipfsBaseUrl}${sub.filename}`, {
-              method: 'GET',
+            const resp = await fetch(`${ipfsBaseUrl}${sub.filename}`, {
+              method: 'HEAD',
             });
-            if (response.ok) {
+            if (resp.ok) {
               const track = document.createElement('track');
               track.kind = 'subtitles';
               track.label = sub.label;
               track.srclang = sub.lang;
               track.src = `${ipfsBaseUrl}${sub.filename}`;
-              return track;
+              if (!foundSubtitle) {
+                track.default = true;
+                foundSubtitle = true;
+              }
+              video.appendChild(track);
             }
-          } catch (e) {
-            return null;
-          }
-        });
+          } catch (e) {}
+        }
 
-        const results = await Promise.all(detectionPromises);
-        results.forEach((track) => {
-          if (track) {
-            if (!foundSubtitle) {
-              track.default = true;
-              foundSubtitle = true;
-            }
-            video.appendChild(track);
-          }
-        });
-
-        // 【修改 2】在 HLS.js 實例化時，傳入起始時間參數
+        // 3. 根據瀏覽器環境啟動 hls.js 或原生播放
         if (Hls.isSupported()) {
-          // 利用 startPosition 讓 hls.js 從指定的秒數開始下載切片
           const hlsConfig = startTime > 0 ? { startPosition: startTime } : {};
           hlsInstance = new Hls(hlsConfig);
-
           hlsInstance.loadSource(m3u8Url);
           hlsInstance.attachMedia(video);
-          hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-            // 提取所有可用的畫質 (例如: 2160, 1080, 720)
-            const availableQualities = hlsInstance.levels.map((l) => l.height);
-            // 加入 0 代表「自動 (Auto)」自適應位元率
-            availableQualities.unshift(0);
 
-            // 初始化 Plyr 播放器，並綁定畫質選單
+          hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+            const qualities = hlsInstance.levels.map((l) => l.height);
+            qualities.unshift(0); // 0 代表自動
+
             playerInstance = new Plyr(video, {
               captions: { active: true, update: true, language: 'zh-TW' },
-              fullscreen: { iosNative: true }, // 【新增】針對 iOS 強制使用原生全螢幕
+              fullscreen: { iosNative: true },
               quality: {
-                default: 0, // 預設為自動切換
-                options: availableQualities,
-                forced: true, // 強制覆蓋原生畫質選單
-                onChange: (newQuality) => {
-                  if (newQuality === 0) {
-                    hlsInstance.currentLevel = -1; // -1 在 hls.js 中代表開啟自動切換 (ABR)
-                  } else {
-                    // 根據使用者選擇的高度 (例如 1080)，找到對應的 HLS level index 並強制切換
-                    hlsInstance.levels.forEach((level, levelIndex) => {
-                      if (level.height === newQuality) {
-                        hlsInstance.currentLevel = levelIndex;
-                      }
+                default: 0,
+                options: qualities,
+                forced: true,
+                onChange: (q) => {
+                  if (q === 0) hlsInstance.currentLevel = -1;
+                  else
+                    hlsInstance.levels.forEach((l, i) => {
+                      if (l.height === q) hlsInstance.currentLevel = i;
                     });
-                  }
                 },
               },
-              i18n: {
-                qualityLabel: {
-                  0: '自動 (Auto)', // 將 0 標示為自動
-                },
-              },
+              i18n: { qualityLabel: { 0: '自動 (Auto)' } },
             });
-
-            statusText.textContent =
-              startTime > 0
-                ? `成功！從 ${startTime} 秒處開始播放。`
-                : `成功！來源：${selectedGateway}`;
-
-            // 使用 Plyr 實例來呼叫播放
-            playerInstance.play().catch(() => {
-              statusText.textContent =
-                '影片已準備好，請點擊畫面或播放按鈕開始。';
-            });
+            statusText.textContent = `✅ 資源就緒！請手動播放${startTime > 0 ? ` (將從 ${startTime} 秒開始)` : ''}。`;
           });
 
-          hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-            if (data.fatal) {
-              statusText.textContent = `網關讀取失敗，請嘗試更換其他網關。`;
-            }
+          hlsInstance.on(Hls.Events.ERROR, (e, data) => {
+            if (data.fatal)
+              statusText.textContent = `❌ 載入失敗，請嘗試更換網關。`;
           });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          // 針對 Safari (原生支援 HLS 的瀏覽器) 的時間跳轉處理
+          // Safari 原生模式
           video.src = m3u8Url;
-
-          // Safari 原生支援 HLS，我們一樣掛上 Plyr 提供美觀 UI，但畫質切換交由 Apple 設備系統原生處理
-          playerInstance = new Plyr(video, {
-            captions: { active: true, update: true, language: 'zh-TW' },
-            fullscreen: { iosNative: true }, // 【新增】針對 iOS 強制使用原生全螢幕
-          });
-
+          playerInstance = new Plyr(video, { fullscreen: { iosNative: true } });
           if (startTime > 0) {
-            // 必須等 metadata 載入後才能調整 currentTime
-            video.addEventListener('loadedmetadata', function setTime() {
-              video.currentTime = startTime;
-              video.removeEventListener('loadedmetadata', setTime); // 執行一次後移除監聽
-            });
+            video.addEventListener(
+              'loadedmetadata',
+              () => {
+                video.currentTime = startTime;
+              },
+              { once: true }
+            );
           }
-          video.play().catch(() => {
-            statusText.textContent = '影片已準備好，請點擊畫面或播放按鈕開始。';
-          });
+          statusText.textContent = `✅ 資源就緒（Safari 原生模式）。`;
         }
       }
 
-      playBtn.addEventListener('click', () => loadAndPlayVideo(0)); // 手動點擊播放時，從頭開始
+      // 事件監聽
+      playBtn.addEventListener('click', () => loadVideoResource(0));
       cidInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') loadAndPlayVideo(0);
+        if (e.key === 'Enter') loadVideoResource(0);
       });
 
-      // 【新增功能 3】一鍵複製帶有當前時間的分享連結
       shareBtn.addEventListener('click', () => {
         const cid = cidInput.value.trim();
-        if (!cid) {
+        const currentVideo = document.getElementById('video');
+        if (!cid || !currentVideo) {
           alert('請先輸入或載入 CID！');
           return;
         }
 
-        // 取得目前的播放秒數並無條件捨去小數點
-        const currentTime = Math.floor(video.currentTime);
+        const url = new URL(window.location.href);
+        url.searchParams.set('cid', cid);
+        const t = Math.floor(currentVideo.currentTime);
+        if (t > 0) url.searchParams.set('t', t);
 
-        // 組合分享網址
-        const shareUrl = new URL(window.location.href);
-        shareUrl.searchParams.set('cid', cid);
-        if (currentTime > 0) {
-          shareUrl.searchParams.set('t', currentTime);
-        }
-
-        // 寫入剪貼簿
-        navigator.clipboard
-          .writeText(shareUrl.toString())
-          .then(() => {
-            const originalText = shareBtn.textContent;
-            shareBtn.textContent = '✅ 已複製！';
-            setTimeout(() => {
-              shareBtn.textContent = originalText;
-            }, 2000);
-          })
-          .catch((err) => {
-            alert('複製失敗，請手動複製網址列。');
-          });
+        navigator.clipboard.writeText(url.toString()).then(() => {
+          const btnText = shareBtn.querySelector('.btn-text');
+          const original = btnText.textContent;
+          btnText.textContent = '✅ 已複製！';
+          setTimeout(() => (btnText.textContent = original), 2000);
+        });
       });
 
-      // 網頁載入時，檢查網址列是否有 cid 與 t 參數
+      // 頁面初始化
       window.addEventListener('DOMContentLoaded', () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const cidFromUrl = urlParams.get('cid');
-        // 如果網址有 ?t=120，將其轉換為整數，若無則為 0
-        const timeFromUrl = parseInt(urlParams.get('t'), 10) || 0;
-
-        if (cidFromUrl) {
-          cidInput.value = cidFromUrl;
-          // 將抓取到的時間參數傳遞給載入函數
-          loadAndPlayVideo(timeFromUrl);
+        const params = new URLSearchParams(window.location.search);
+        const cid = params.get('cid');
+        const t = parseInt(params.get('t'), 10) || 0;
+        if (cid) {
+          cidInput.value = cid;
+          loadVideoResource(t);
         }
       });
     </script>
