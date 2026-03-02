@@ -112,6 +112,84 @@
             color: #333;
             font-weight: bold;
         }
+        
+        /* --- RWD 響應式設計區塊 --- */
+
+        /* 1. 電腦版基礎設定：讓按鈕具備 Flexbox 置中能力 */
+        .action-btn {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        /* 預設隱藏單純的 Icon */
+        .btn-icon {
+            display: none;
+        }
+
+        /* 當螢幕寬度小於 600px 時 */
+        @media (max-width: 600px) {
+            .container {
+                padding: 15px; /* 縮小容器內距，騰出空間給元件 */
+                margin-top: 20px;
+            }
+
+            .btn-text {
+                display: none; /* 隱藏文字 */
+            }
+
+            .btn-icon {
+                display: block; /* 顯示圖示 */
+                font-size: 1.2rem;
+                line-height: 1;
+            }
+
+            /* 按鈕改造：變成不變形的置中正方形 */
+            .action-btn {
+                padding: 0;
+                width: 46px;      /* 固定寬度 */
+                height: 46px;     /* 固定高度 */
+                flex-shrink: 0;   /* 強制不被輸入框擠壓 */
+                border-radius: 8px;
+            }
+
+            /* 輸入框與按鈕的間距微調 */
+            .input-row {
+                gap: 8px;
+            }
+            
+            input[type="text"] {
+                padding: 10px;    /* 稍微縮小輸入框內距 */
+                font-size: 14px;  /* 稍微縮小字體防止 CID 太長看不見 */
+            }
+
+            /* 隱藏網關選單的標籤文字 */
+            label[for="gatewaySelect"] {
+                display: none;
+            }
+            
+            select {
+                width: 100%;      /* 讓網關選單佔滿整行 */
+            }
+        }
+
+        /* 針對 375px 以下極窄螢幕的終極微調 */
+        @media (max-width: 380px) {
+            .container {
+                padding: 10px;    /* 進一步壓縮內距 */
+            }
+            
+            .action-btn {
+                width: 42px;      /* 按鈕稍微縮小一點點 */
+                height: 42px;
+            }
+            
+            h2 {
+                font-size: 1.2rem; /* 標題縮小避免換行 */
+            }
+        }
     </style>
 </head>
 
@@ -133,8 +211,14 @@
 
             <div class="input-row">
                 <input type="text" id="cidInput" placeholder="請輸入資料夾 CID (例如: Qm...)">
-                <button id="playBtn">開始播放</button>
-                <button id="shareBtn" title="複製包含目前播放時間的連結">🔗 分享片段</button>
+                <button id="playBtn" class="action-btn">
+                    <span class="btn-text">▶️ 開始播放</span>
+                    <span class="btn-icon">▶️</span>
+                </button>
+                <button id="shareBtn" class="action-btn" title="複製包含目前播放時間的連結">
+                    <span class="btn-text">🔗 分享片段</span>
+                    <span class="btn-icon">🔗</span>
+                </button>
             </div>
         </div>
 
